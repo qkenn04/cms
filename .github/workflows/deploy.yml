@@ -44,7 +44,7 @@ jobs:
           corepack enable pnpm
           pnpm i --frozen-lockfile
           pnpm exec tsc --noEmit
-          pnpm exec vitest run --config ./vitest.config.mts tests/int/triggerSiteRebuild.int.spec.ts tests/int/slugify.int.spec.ts tests/int/htmlConverters.int.spec.ts
+          pnpm exec vitest run --config ./vitest.config.mts tests/int/triggerSiteRebuild.int.spec.ts tests/int/slugify.int.spec.ts tests/int/htmlConverters.int.spec.ts tests/int/draftMarkdown.int.spec.ts
 
       - name: Build + push image lên GHCR
         env:

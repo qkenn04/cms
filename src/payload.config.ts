@@ -1,5 +1,11 @@
 import { postgresAdapter } from '@payloadcms/db-postgres'
-import { LinkFeature, lexicalEditor } from '@payloadcms/richtext-lexical'
+import {
+  BlocksFeature,
+  CodeBlock,
+  EXPERIMENTAL_TableFeature,
+  LinkFeature,
+  lexicalEditor,
+} from '@payloadcms/richtext-lexical'
 import path from 'path'
 import { buildConfig } from 'payload'
 import { fileURLToPath } from 'url'
@@ -14,6 +20,7 @@ import { Pages } from './collections/Pages'
 import { Posts } from './collections/Posts'
 import { Users } from './collections/Users'
 import { SiteSettings } from './globals/SiteSettings'
+import { CODE_LANGUAGES, DEFAULT_CODE_LANGUAGE } from './lexical/codeLanguages'
 import { migrations } from './migrations'
 
 const filename = fileURLToPath(import.meta.url)
@@ -51,10 +58,17 @@ export default buildConfig({
   },
   // Tắt "internal link": contentHtml không biết locale/route của site → link nội bộ ra href="#".
   // Editor dán URL tương đối (vd /blog/xin-chao) bằng link custom.
+  // Code block (block 'Code': fields language + code) và bảng: là node trong JSON richText → không cần migration.
+  // HTML của 2 loại này: src/lexical/htmlConverters.ts
   editor: lexicalEditor({
     features: ({ defaultFeatures }) => [
       ...defaultFeatures.filter((feature) => feature.key !== 'link'),
       LinkFeature({ enabledCollections: [] }),
+      BlocksFeature({
+        blocks: [CodeBlock({ languages: CODE_LANGUAGES, defaultLanguage: DEFAULT_CODE_LANGUAGE })],
+      }),
+      // Bảng của Lexical (còn EXPERIMENTAL trong 3.90.2); markdown GFM `| a | b |` import thành bảng
+      EXPERIMENTAL_TableFeature(),
     ],
   }),
   secret: process.env.PAYLOAD_SECRET || '',

@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { convertLexicalToHTMLAsync } from '@payloadcms/richtext-lexical/html-async'
 
-import { buildSrcset, htmlConverters } from '@/lexical/htmlConverters'
+import {
+  buildSrcset,
+  codeBlockToHTML,
+  escapeHTML,
+  htmlConverters,
+  sanitizeCodeLanguage,
+} from '@/lexical/htmlConverters'
 import type { Media } from '@/payload-types'
 
 const base = 'https://cms.example/api/media/file'
@@ -159,5 +165,148 @@ describe('htmlConverters: upload trong contentHtml', () => {
       populate: vi.fn().mockResolvedValue(undefined),
     })
     expect(missing).not.toContain('<img')
+  })
+})
+
+// ---------- code block + bảng ----------
+
+const root = (...children: unknown[]) =>
+  ({
+    root: { type: 'root', version: 1, direction: null, format: '', indent: 0, children },
+  }) as never
+
+const text = (t: string, format = 0) => ({
+  type: 'text',
+  version: 1,
+  text: t,
+  format,
+  style: '',
+  mode: 'normal',
+  detail: 0,
+})
+const para = (...children: unknown[]) => ({
+  type: 'paragraph',
+  version: 1,
+  direction: null,
+  format: '',
+  indent: 0,
+  textFormat: 0,
+  children,
+})
+const codeBlock = (code: string, language?: string) => ({
+  type: 'block',
+  version: 2,
+  format: '',
+  fields: { id: 'b1', blockName: '', blockType: 'Code', code, language },
+})
+const cell = (headerState: number, ...children: unknown[]) => ({
+  type: 'tablecell',
+  version: 1,
+  direction: null,
+  format: '',
+  indent: 0,
+  headerState,
+  children,
+})
+const row = (...cells: unknown[]) => ({
+  type: 'tablerow',
+  version: 1,
+  direction: null,
+  format: '',
+  indent: 0,
+  children: cells,
+})
+const table = (...rows: unknown[]) => ({
+  type: 'table',
+  version: 1,
+  direction: null,
+  format: '',
+  indent: 0,
+  children: rows,
+})
+
+const toHTML = (data: never) =>
+  convertLexicalToHTMLAsync({ converters: htmlConverters, data, disableContainer: true })
+
+describe('htmlConverters: code block', () => {
+  it('escape & < > " \' — code chứa </code><script> không thoát được khỏi <code>', async () => {
+    const code = `</code><script>alert("x" & 'y')</script>`
+    const html = await toHTML(root(codeBlock(code, 'html')))
+    expect(html).toBe(
+      '<pre><code class="language-html">&lt;/code&gt;&lt;script&gt;alert(&quot;x&quot; &amp; &#39;y&#39;)&lt;/script&gt;</code></pre>',
+    )
+    expect(html).not.toContain('<script')
+    expect(html.match(/<\/code>/g)).toHaveLength(1)
+  })
+
+  it('giữ nguyên khoảng trắng, tab, dòng trống và xuống dòng cuối', async () => {
+    const code = '  if (a) {\n\t\treturn  1\n\n  }\n'
+    const html = await toHTML(root(codeBlock(code, 'ts')))
+    expect(html).toBe(`<pre><code class="language-ts">${code}</code></pre>`)
+  })
+
+  it('ngôn ngữ: chỉ giữ [a-z0-9+#-], rỗng/không có → text', async () => {
+    expect(sanitizeCodeLanguage('TypeScript')).toBe('typescript')
+    expect(sanitizeCodeLanguage('c++')).toBe('c++')
+    expect(sanitizeCodeLanguage('c#')).toBe('c#')
+    expect(sanitizeCodeLanguage('objective-c')).toBe('objective-c')
+    expect(sanitizeCodeLanguage('x" onmouseover="alert(1)')).toBe('xonmouseoveralert1')
+    expect(sanitizeCodeLanguage('<>"\' ')).toBe('text')
+    expect(sanitizeCodeLanguage('')).toBe('text')
+    expect(sanitizeCodeLanguage(undefined)).toBe('text')
+    expect(sanitizeCodeLanguage(42)).toBe('text')
+
+    expect(await toHTML(root(codeBlock('echo hi', 'bash" onclick="x')))).toBe(
+      '<pre><code class="language-bashonclickx">echo hi</code></pre>',
+    )
+    expect(await toHTML(root(codeBlock('plain')))).toBe(
+      '<pre><code class="language-text">plain</code></pre>',
+    )
+  })
+
+  it('codeBlockToHTML / escapeHTML dùng riêng được; code không phải chuỗi → rỗng', () => {
+    expect(escapeHTML(`<a href="x">'&'</a>`)).toBe(
+      '&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;',
+    )
+    expect(codeBlockToHTML({ code: undefined, language: 'sh' })).toBe(
+      '<pre><code class="language-sh"></code></pre>',
+    )
+  })
+
+  it('không làm hỏng inline code và đoạn văn xung quanh', async () => {
+    const html = await toHTML(root(para(text('Chạy '), text('<cmd>', 16)), codeBlock('ls', 'sh')))
+    expect(html).toBe(
+      '<p>Chạy <code>&lt;cmd&gt;</code></p><pre><code class="language-sh">ls</code></pre>',
+    )
+  })
+})
+
+describe('htmlConverters: bảng', () => {
+  it('hàng header (headerState ROW) → <thead><th scope="col">, còn lại <tbody><td>, bọc .table-wrap, không style inline', async () => {
+    const html = await toHTML(
+      root(
+        table(
+          row(cell(1, para(text('Tên'))), cell(1, para(text('Giá trị')))),
+          row(cell(0, para(text('a < b'))), cell(0, para(text('x'), text('y', 1)))),
+          row(cell(0, para(text('c'))), cell(0)),
+        ),
+      ),
+    )
+    expect(html).toBe(
+      '<div class="table-wrap"><table>' +
+        '<thead><tr><th scope="col">Tên</th><th scope="col">Giá trị</th></tr></thead>' +
+        '<tbody><tr><td>a &lt; b</td><td>x<strong>y</strong></td></tr><tr><td>c</td><td></td></tr></tbody>' +
+        '</table></div>',
+    )
+    expect(html).not.toContain('style=')
+  })
+
+  it('bảng không có header → chỉ <tbody>; ô header cột (COLUMN) → <th scope="row">; colspan', async () => {
+    const html = await toHTML(
+      root(table(row({ ...cell(2, para(text('k'))), colSpan: 2 }, cell(0, para(text('v')))))),
+    )
+    expect(html).toBe(
+      '<div class="table-wrap"><table><tbody><tr><th scope="row" colspan="2">k</th><td>v</td></tr></tbody></table></div>',
+    )
   })
 })
