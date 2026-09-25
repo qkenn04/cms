@@ -64,7 +64,7 @@ export const Pages: CollectionConfig = {
       index: true,
       options: [
         { label: 'qkenn.cloud', value: 'qkenn' },
-        { label: 'nail_website', value: 'nail' },
+        { label: 'Site khác (dự phòng)', value: 'other' },
       ],
       admin: { position: 'sidebar' },
     },

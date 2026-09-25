@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 
-# Không chạy 2 deploy song song; không huỷ giữa chừng (deploy.sh đang thay container)
+# Không chạy 2 deploy song song; không huỷ giữa chừng (receiver trên VPS đang thay container)
 concurrency:
   group: deploy-cms-production
   cancel-in-progress: false
@@ -33,6 +33,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Test receiver deploy/rollback (docker/curl giả, không đụng VPS)
+        run: bash scripts/test-deploy.sh
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -64,7 +67,9 @@ jobs:
           docker push "$IMAGE:latest"
           echo "✓ đã đẩy $IMAGE:$SHA"
 
-  # 2. SSH vào VPS chạy deploy.sh (forced command) — script tự pull đúng tag = commit SHA
+  # 2. SSH vào VPS, gửi đúng 1 lệnh "deploy <sha>" cho forced command /usr/local/bin/qkenn-cms-deploy
+  #    (bản sao root của scripts/deploy.sh — VPS không git pull, không chạy code lấy từ repo).
+  #    Host key của VPS phải khớp secret SSH_KNOWN_HOSTS (thiếu → job FAIL, không bỏ qua xác minh).
   deploy:
     name: Deploy lên VPS
     needs: build
@@ -76,19 +81,36 @@ jobs:
           SSH_KEY_B64: ${{ secrets.SSH_KEY_B64 }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          DEPLOY_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           if [ -z "${SSH_KEY_B64:-}" ] || [ -z "${SSH_HOST:-}" ]; then
             echo "::warning::Chưa cấu hình secret SSH_KEY_B64/SSH_HOST — bỏ qua deploy (image vẫn đã lên GHCR)"
             exit 0
           fi
-          mkdir -p ~/.ssh
-          echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null 2>&1 || { echo "❌ Khoá sai định dạng"; exit 1; }
-          ssh -i ~/.ssh/deploy_key \
-              -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 \
-              "${SSH_USER:-root}@$SSH_HOST" "trigger-deploy"
+          if [ -z "${SSH_KNOWN_HOSTS:-}" ]; then
+            echo "::error::Thiếu secret SSH_KNOWN_HOSTS (host key public của VPS, dạng '<host> ssh-ed25519 AAAA…') — không deploy khi chưa xác minh được máy đích. Xem CLAUDE.md phần Deploy."
+            exit 1
+          fi
+          if [[ ! $DEPLOY_SHA =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::github.sha không phải 40 ký tự hex: $DEPLOY_SHA"
+            exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          if ! ssh-keygen -F "$SSH_HOST" -f ~/.ssh/known_hosts >/dev/null 2>&1; then
+            echo "::error::SSH_KNOWN_HOSTS không có dòng nào cho SSH_HOST — cột đầu phải đúng giá trị của SSH_HOST"
+            exit 1
+          fi
+          (umask 077 && printf '%s' "$SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key)
+          ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null 2>&1 || { echo "::error::SSH_KEY_B64 không phải private key hợp lệ"; exit 1; }
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=20 \
+              -o ServerAliveInterval=15 -o ServerAliveCountMax=8 \
+              "${SSH_USER:-root}@$SSH_HOST" "deploy $DEPLOY_SHA" </dev/null
 
   # 3. Báo Discord mọi trường hợp
   notify:

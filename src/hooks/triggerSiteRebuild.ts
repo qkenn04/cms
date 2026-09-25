@@ -12,7 +12,7 @@ type Logger = Pick<PayloadRequest['payload']['logger'], 'info' | 'warn' | 'error
 // Repo site tĩnh cho từng giá trị field `site`; site chưa có repo thì bỏ qua
 const repoForSite = (site: string | null | undefined): string | undefined => {
   if (site === 'qkenn') return process.env.SITE_REPO
-  if (site === 'nail') return process.env.NAIL_SITE_REPO
+  if (site === 'other') return process.env.OTHER_SITE_REPO
   return undefined
 }
 

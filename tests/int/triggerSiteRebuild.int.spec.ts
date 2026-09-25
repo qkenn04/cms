@@ -97,10 +97,23 @@ describe('dispatchSiteRebuild', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('không gọi cho site chưa cấu hình repo (vd nail)', async () => {
-    const ok = await dispatchSiteRebuild({ logger, site: 'nail', slug: 'x', reason: 'publish' })
+  it('không gọi cho site chưa cấu hình repo (vd other)', async () => {
+    vi.stubEnv('OTHER_SITE_REPO', '')
+    const ok = await dispatchSiteRebuild({ logger, site: 'other', slug: 'x', reason: 'publish' })
     expect(ok).toBe(false)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('site other dùng repo riêng OTHER_SITE_REPO khi được cấu hình', async () => {
+    vi.stubEnv('OTHER_SITE_REPO', 'example/other-site')
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
+    const ok = await dispatchSiteRebuild({ logger, site: 'other', slug: 'x', reason: 'publish' })
+
+    expect(ok).toBe(true)
+    const [url] = fetchMock.mock.calls[0]
+    expect(url).toBe(
+      'https://api.github.com/repos/example/other-site/actions/workflows/deploy.yml/dispatches',
+    )
   })
 
   it('GitHub lỗi: không throw, chỉ log', async () => {

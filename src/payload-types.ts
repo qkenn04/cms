@@ -167,7 +167,7 @@ export interface Post {
   categories?: (number | Category)[] | null;
   author?: (number | null) | User;
   publishedAt?: string | null;
-  site: 'qkenn' | 'nail';
+  site: 'qkenn' | 'other';
   meta?: {
     title?: string | null;
     description?: string | null;
@@ -309,7 +309,7 @@ export interface Page {
     [k: string]: unknown;
   };
   contentHtml?: string | null;
-  site: 'qkenn' | 'nail';
+  site: 'qkenn' | 'other';
   meta?: {
     title?: string | null;
     description?: string | null;
