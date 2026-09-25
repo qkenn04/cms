@@ -4,7 +4,7 @@
 Mọi lệnh chạy trong Docker `node:22-alpine` (Node trên host là 18):
 `docker run --rm --network host -v "$PWD":/app -w /app node:22-alpine sh -c "corepack enable pnpm && <lệnh>"`
 
-- DB dev: `DEV_DB_PASSWORD=... docker compose -f docker-compose.dev.yml up -d` (Postgres 127.0.0.1:5433)
+- DB dev: `DEV_DB_PASSWORD=$(cut -d= -f2 /root/.cms-dev-secrets) docker compose -f docker-compose.dev.yml up -d` (Postgres 127.0.0.1:5433)
 - Dev server: `pnpm dev -p 3003 -H 127.0.0.1` (3002 dành cho production)
 - Tạo migration: `pnpm migrate:create <tên>` — KHÔNG gọi thẳng `payload migrate:create` (xem bên dưới)
 - Áp migration: `pnpm migrate`; sau đó `pnpm generate:types` và `pnpm payload generate:importmap`

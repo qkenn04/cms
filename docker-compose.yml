@@ -1,6 +1,8 @@
 # Stack production Payload CMS — chạy tại /root/cms trên VPS (git clone repo này + file .env).
 # DB ở mạng "internal" (internal: true = không ra internet, không có cổng host).
 # cms ở cả internal (nối db) + external (gọi R2, GitHub API; nhận request từ nginx).
+name: cms
+
 services:
   db:
     image: postgres:16-alpine

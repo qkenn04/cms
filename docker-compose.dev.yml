@@ -1,3 +1,6 @@
+# Project riêng: không trùng với compose production (cùng tên thư mục "cms")
+name: cms-dev
+
 services:
   db:
     image: postgres:16-alpine
