@@ -1,4 +1,9 @@
-import type { CollectionAfterChangeHook, CollectionAfterDeleteHook, PayloadRequest } from 'payload'
+import type {
+  CollectionAfterChangeHook,
+  CollectionAfterDeleteHook,
+  GlobalAfterChangeHook,
+  PayloadRequest,
+} from 'payload'
 
 type Status = 'draft' | 'published' | null | undefined
 type PostLike = { _status?: Status; slug?: string | null; site?: string | null }
@@ -43,7 +48,7 @@ export const dispatchSiteRebuild = async ({
   logger: Logger
   site: string | null | undefined
   slug: string | null | undefined
-  reason: 'publish' | 'unpublish' | 'delete'
+  reason: 'publish' | 'unpublish' | 'delete' | 'settings'
 }): Promise<boolean> => {
   if (!isEnabled()) return false
   const repo = repoForSite(site)
@@ -90,5 +95,11 @@ export const rebuildSiteAfterDelete: CollectionAfterDeleteHook = async ({ doc, r
   if (doc?._status === 'published') {
     void dispatchSiteRebuild({ logger: req.payload.logger, site: doc.site, slug: doc.slug, reason: 'delete' })
   }
+  return doc
+}
+
+// site-settings (menu, footer, tagline…) không có nháp: mỗi lần lưu là đổi nội dung public → build lại site qkenn
+export const rebuildSiteAfterGlobalChange: GlobalAfterChangeHook = async ({ doc, req }) => {
+  void dispatchSiteRebuild({ logger: req.payload.logger, site: 'qkenn', slug: 'site-settings', reason: 'settings' })
   return doc
 }

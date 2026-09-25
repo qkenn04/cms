@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { decideRebuild, dispatchSiteRebuild } from '@/hooks/triggerSiteRebuild'
+import { decideRebuild, dispatchSiteRebuild, rebuildSiteAfterGlobalChange } from '@/hooks/triggerSiteRebuild'
 
 const published = { _status: 'published', slug: 'xin-chao', site: 'qkenn' } as const
 const draft = { _status: 'draft', slug: 'xin-chao', site: 'qkenn' } as const
@@ -100,5 +100,37 @@ describe('dispatchSiteRebuild', () => {
       dispatchSiteRebuild({ logger, site: 'qkenn', slug: 'x', reason: 'publish' }),
     ).resolves.toBe(false)
     expect(logger.error).toHaveBeenCalled()
+  })
+})
+
+describe('rebuildSiteAfterGlobalChange (site-settings)', () => {
+  const fetchMock = vi.fn()
+  const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubEnv('SITE_REBUILD_ENABLED', 'true')
+    vi.stubEnv('GITHUB_DISPATCH_TOKEN', 'test-token')
+    vi.stubEnv('SITE_REPO', 'qkenn04/qkenn-site')
+    fetchMock.mockReset()
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
+  })
+
+  it('dispatch cho site qkenn khi lưu site-settings (menu/footer đổi phải build lại)', async () => {
+    const doc = { siteName: 'qkenn' }
+    const req = { payload: { logger } } as never
+    const result = await rebuildSiteAfterGlobalChange({ data: doc, doc, previousDoc: doc, req, global: {} as never, context: {} })
+    expect(result).toBe(doc)
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    const [, init] = fetchMock.mock.calls[0]
+    expect(JSON.parse(init.body)).toEqual({
+      event_type: 'cms-publish',
+      client_payload: { site: 'qkenn', slug: 'site-settings', reason: 'settings' },
+    })
   })
 })

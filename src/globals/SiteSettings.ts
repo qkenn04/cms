@@ -1,6 +1,7 @@
 import type { GlobalConfig } from 'payload'
 
 import { anyone, isAdmin } from '../access'
+import { rebuildSiteAfterGlobalChange } from '../hooks/triggerSiteRebuild'
 
 export const SiteSettings: GlobalConfig = {
   slug: 'site-settings',
@@ -9,6 +10,8 @@ export const SiteSettings: GlobalConfig = {
     update: isAdmin,
   },
   versions: { max: 20 },
+  // Menu / footer / tagline hiển thị trên site tĩnh → lưu là build lại site
+  hooks: { afterChange: [rebuildSiteAfterGlobalChange] },
   fields: [
     { name: 'siteName', type: 'text', required: true, defaultValue: 'qkenn' },
     { name: 'tagline', type: 'text', localized: true },
