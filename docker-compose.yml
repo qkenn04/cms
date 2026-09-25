@@ -1,43 +1,60 @@
-version: '3'
-
+# Stack production Payload CMS — chạy tại /root/cms trên VPS (git clone repo này + file .env).
+# DB ở mạng "internal" (internal: true = không ra internet, không có cổng host).
+# cms ở cả internal (nối db) + external (gọi R2, GitHub API; nhận request từ nginx).
 services:
-  payload:
-    image: node:20-alpine
-    ports:
-      - '3000:3000'
+  db:
+    image: postgres:16-alpine
+    container_name: cms-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - .:/home/node/app
-      - node_modules:/home/node/app/node_modules
-    working_dir: /home/node/app/
-    command: sh -c "corepack enable && corepack prepare pnpm@latest --activate && pnpm install && pnpm dev"
-    depends_on:
-      - mongo
-      # - postgres
-    env_file:
-      - .env
-
-  # Ensure your DATABASE_URL uses 'mongo' as the hostname ie. mongodb://mongo/my-db-name
-  mongo:
-    image: mongo:latest
-    ports:
-      - '27017:27017'
-    command:
-      - --storageEngine=wiredTiger
-    volumes:
-      - data:/data/db
+      - cms_pgdata:/var/lib/postgresql/data
+    mem_limit: 1g
+    cpus: 1.0
     logging:
-      driver: none
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Uncomment the following to use postgres
-  # postgres:
-  #   restart: always
-  #   image: postgres:latest
-  #   volumes:
-  #     - pgdata:/var/lib/postgresql/data
-  #   ports:
-  #     - "5432:5432"
+  cms:
+    # Image do CI build; deploy.sh đặt IMAGE_TAG = commit SHA đang deploy.
+    # Rollback: scripts/rollback.sh <sha>
+    image: ghcr.io/qkenn04/cms:${IMAGE_TAG:-latest}
+    container_name: cms-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      NEXT_PUBLIC_SERVER_URL: https://cms.qkenn.cloud
+    mem_limit: 1536m
+    cpus: 1.5
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    networks:
+      - internal
+      - external
+    ports:
+      - "127.0.0.1:3002:3000"
+
+networks:
+  internal:
+    internal: true
+  external:
+    driver: bridge
 
 volumes:
-  data:
-  # pgdata:
-  node_modules:
+  cms_pgdata:
+    name: cms_pgdata

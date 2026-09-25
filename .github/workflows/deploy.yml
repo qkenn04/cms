@@ -1,0 +1,119 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Không chạy 2 deploy song song; không huỷ giữa chừng (deploy.sh đang thay container)
+concurrency:
+  group: deploy-cms-production
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/qkenn04/cms
+  SERVER_URL: https://cms.qkenn.cloud
+
+jobs:
+  # 1. Kiểm tra + build image, đẩy lên GHCR. Hỏng ở đây → VPS không bị đụng.
+  build:
+    name: Kiểm tra + build image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Cổng chất lượng — type check + unit test
+        run: |
+          set -euo pipefail
+          corepack enable pnpm
+          pnpm i --frozen-lockfile
+          pnpm exec tsc --noEmit
+          pnpm exec vitest run --config ./vitest.config.mts tests/int/triggerSiteRebuild.int.spec.ts
+
+      - name: Build + push image lên GHCR
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+          SOURCE: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+          docker build --pull \
+            --build-arg NEXT_PUBLIC_SERVER_URL="$SERVER_URL" \
+            --label "org.opencontainers.image.source=$SOURCE" \
+            --label "org.opencontainers.image.revision=$SHA" \
+            -t "$IMAGE:$SHA" -t "$IMAGE:latest" .
+          docker push "$IMAGE:$SHA"
+          docker push "$IMAGE:latest"
+          echo "✓ đã đẩy $IMAGE:$SHA"
+
+  # 2. SSH vào VPS chạy deploy.sh (forced command) — script tự pull đúng tag = commit SHA
+  deploy:
+    name: Deploy lên VPS
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Deploy lên VPS qua SSH
+        env:
+          SSH_KEY_B64: ${{ secrets.SSH_KEY_B64 }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SSH_KEY_B64:-}" ] || [ -z "${SSH_HOST:-}" ]; then
+            echo "::warning::Chưa cấu hình secret SSH_KEY_B64/SSH_HOST — bỏ qua deploy (image vẫn đã lên GHCR)"
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null 2>&1 || { echo "❌ Khoá sai định dạng"; exit 1; }
+          ssh -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 \
+              "${SSH_USER:-root}@$SSH_HOST" "trigger-deploy"
+
+  # 3. Báo Discord mọi trường hợp
+  notify:
+    name: Báo kết quả về Discord
+    needs: [build, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Gửi thẻ Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WEBHOOK:-}" ]; then echo "⏭  Chưa có DISCORD_WEBHOOK → bỏ qua"; exit 0; fi
+          if [ "$DEPLOY_RESULT" = "success" ]; then TITLE="✅ CMS deploy thành công"; COLOR=3066993
+          elif [ "$BUILD_RESULT" != "success" ]; then TITLE="❌ CMS build THẤT BẠI — VPS không bị đụng"; COLOR=15158332
+          else TITLE="❌ CMS deploy THẤT BẠI"; COLOR=15158332; fi
+          MSG="${COMMIT_MSG:-(chạy thủ công)}"; MSG="${MSG%%$'\n'*}"
+          jq -n --arg t "$TITLE" --arg u "$RUN_URL" --arg m "$MSG" --arg s "${SHA:0:7}" --argjson c "$COLOR" \
+            '{embeds:[{title:$t,url:$u,color:$c,description:$m,fields:[{name:"Commit",value:$s,inline:true}],footer:{text:"cms.qkenn.cloud"},timestamp:(now|todate)}]}' \
+            > /tmp/discord.json
+          curl -sS --fail-with-body -X POST -H "Content-Type: application/json" -d @/tmp/discord.json "$WEBHOOK"

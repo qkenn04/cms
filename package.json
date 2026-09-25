@@ -50,8 +50,8 @@
     "vitest": "4.0.18"
   },
   "engines": {
-    "node": "^18.20.2 || >=20.9.0",
-    "pnpm": "^9 || ^10 || ^11"
+    "node": ">=22",
+    "pnpm": "^12"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -59,5 +59,6 @@
       "esbuild",
       "unrs-resolver"
     ]
-  }
+  },
+  "packageManager": "pnpm@12.6.0"
 }
