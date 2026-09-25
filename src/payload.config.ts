@@ -24,6 +24,8 @@ const origins = [serverURL, ...(process.env.CORS_ORIGINS || '').split(',').filte
 // Có R2_PUBLIC_URL (custom domain của bucket) thì ảnh serve thẳng từ CDN;
 // chưa có thì Payload đọc từ R2 và trả qua /api/media/file/*
 const r2PublicURL = process.env.R2_PUBLIC_URL?.replace(/\/$/, '')
+// Tách thư mục trong bucket theo môi trường: dev xoá ảnh không đụng ảnh production
+const r2Prefix = process.env.R2_PREFIX || 'qkenn'
 
 export default buildConfig({
   serverURL,
@@ -98,11 +100,11 @@ export default buildConfig({
       collections: {
         media: r2PublicURL
           ? {
-              prefix: 'qkenn',
+              prefix: r2Prefix,
               disablePayloadAccessControl: true,
               generateFileURL: ({ filename, prefix }) => `${r2PublicURL}/${prefix}/${filename}`,
             }
-          : { prefix: 'qkenn' },
+          : { prefix: r2Prefix },
       },
       bucket: process.env.R2_BUCKET || '',
       config: {
