@@ -160,6 +160,7 @@ export interface Post {
     };
     [k: string]: unknown;
   };
+  contentHtml?: string | null;
   coverImage?: (number | null) | Media;
   categories?: (number | Category)[] | null;
   author?: (number | null) | User;
@@ -462,6 +463,7 @@ export interface PostsSelect<T extends boolean = true> {
   slug?: T;
   excerpt?: T;
   content?: T;
+  contentHtml?: T;
   coverImage?: T;
   categories?: T;
   author?: T;

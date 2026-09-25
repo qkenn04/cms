@@ -1,4 +1,5 @@
-import type { CollectionConfig } from 'payload'
+import type { CodeField, CollectionConfig } from 'payload'
+import { lexicalHTMLField } from '@payloadcms/richtext-lexical'
 
 import { isEditorOrAdmin, publishedOrLoggedIn } from '../access'
 import { slugFrom } from '../hooks/slugify'
@@ -49,6 +50,12 @@ export const Posts: CollectionConfig = {
     },
     { name: 'excerpt', type: 'textarea', localized: true, maxLength: 300 },
     { name: 'content', type: 'richText', required: true, localized: true },
+    // HTML sinh từ `content` mỗi lần đọc — site Astro render thẳng.
+    // virtual: không tạo cột DB (storeInDB: false của lexicalHTMLField vẫn tạo cột rỗng)
+    {
+      ...(lexicalHTMLField({ lexicalFieldName: 'content', htmlFieldName: 'contentHtml' }) as CodeField),
+      virtual: true,
+    },
     { name: 'coverImage', type: 'upload', relationTo: 'media' },
     { name: 'categories', type: 'relationship', relationTo: 'categories', hasMany: true },
     {
