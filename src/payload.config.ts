@@ -10,6 +10,7 @@ import { s3Storage } from '@payloadcms/storage-s3'
 
 import { Categories } from './collections/Categories'
 import { Media } from './collections/Media'
+import { Pages } from './collections/Pages'
 import { Posts } from './collections/Posts'
 import { Users } from './collections/Users'
 import { SiteSettings } from './globals/SiteSettings'
@@ -37,7 +38,7 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Posts, Categories, Media, Users],
+  collections: [Posts, Pages, Categories, Media, Users],
   globals: [SiteSettings],
   // Song ngữ từ ngày 1: đổi `localized` trên field đã có dữ liệu sẽ mất dữ liệu field đó
   localization: {
@@ -118,7 +119,7 @@ export default buildConfig({
       },
     }),
     seoPlugin({
-      collections: ['posts'],
+      collections: ['posts', 'pages'],
       uploadsCollection: 'media',
       tabbedUI: true,
       generateTitle: ({ doc }) => (doc?.title ? `${doc.title} | qkenn` : 'qkenn'),

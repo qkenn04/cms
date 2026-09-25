@@ -20,9 +20,9 @@ Mọi lệnh chạy trong Docker `node:22-alpine` (Node trên host là 18):
 - Secret chỉ ở `.env` (gitignore); `.env.example` ghi tên biến
 
 ## Architecture
-- `src/collections` (posts, categories, media, users), `src/globals` (site-settings), `src/hooks`, `src/access`, `src/migrations`
+- `src/collections` (posts, pages, categories, media, users), `src/globals` (site-settings), `src/hooks`, `src/access`, `src/migrations`
 - Media trên Cloudflare R2 (`@payloadcms/storage-s3`), prefix theo `R2_PREFIX` (production `qkenn`, dev `dev`)
-- `posts` afterChange/afterDelete → GitHub `repository_dispatch` sang `SITE_REPO` → build site Astro
+- `posts`, `pages` afterChange/afterDelete → GitHub `repository_dispatch` sang `SITE_REPO` → build site Astro
 - Production: `/root/cms` (clone repo + `.env`), `scripts/deploy.sh` do GitHub Actions gọi qua SSH forced command
 
 ## Things Claude gets wrong

@@ -3,24 +3,23 @@ import { getPayload } from 'payload'
 
 import config from './payload.config'
 
-const paragraph = (text: string) => ({
+// Mỗi chuỗi truyền vào là 1 đoạn văn
+const paragraph = (...texts: string[]) => ({
   root: {
     type: 'root',
     format: '' as const,
     indent: 0,
     version: 1,
     direction: 'ltr' as const,
-    children: [
-      {
-        type: 'paragraph',
-        format: '' as const,
-        indent: 0,
-        version: 1,
-        direction: 'ltr' as const,
-        textFormat: 0,
-        children: [{ type: 'text', text, format: 0, detail: 0, mode: 'normal', style: '', version: 1 }],
-      },
-    ],
+    children: texts.map((text) => ({
+      type: 'paragraph',
+      format: '' as const,
+      indent: 0,
+      version: 1,
+      direction: 'ltr' as const,
+      textFormat: 0,
+      children: [{ type: 'text', text, format: 0, detail: 0, mode: 'normal', style: '', version: 1 }],
+    })),
   },
 })
 
@@ -50,6 +49,29 @@ const posts = [
     category: 'ghi-chep',
     vi: { title: 'Bản nháp', excerpt: 'Không được lộ ra public.', body: 'Nội dung nháp.' },
     en: null,
+  },
+]
+
+// Nội dung tạm — chủ site thay trong admin
+const pages = [
+  {
+    slug: 'about',
+    vi: {
+      title: 'Giới thiệu',
+      body: [
+        'Xin chào! Tôi là một kỹ sư phần mềm và là người đứng sau qkenn.cloud — nơi tôi ghi lại những gì học được khi xây dựng hệ thống web.',
+        'Công việc của tôi xoay quanh việc thiết kế và xây dựng các hệ thống web: backend, cơ sở dữ liệu và hạ tầng để triển khai chúng. Mọi dịch vụ của qkenn.cloud đều được tự host trên một VPS riêng.',
+        '(Đây là nội dung tạm — phần giới thiệu này sẽ được cập nhật trong CMS.)',
+      ],
+    },
+    en: {
+      title: 'About',
+      body: [
+        "Hi! I'm a software engineer and the person behind qkenn.cloud, where I write down what I learn while building web systems.",
+        'My work revolves around designing and building web systems: backends, databases and the infrastructure to deploy them. Every service on qkenn.cloud is self-hosted on a VPS.',
+        '(This is placeholder content — this introduction will be updated in the CMS.)',
+      ],
+    },
   },
 ]
 
@@ -99,6 +121,37 @@ for (const p of posts) {
     })
   }
   payload.logger.info(`tạo: ${p.slug} (${p.status})`)
+}
+
+for (const pg of pages) {
+  const existing = await payload.find({
+    collection: 'pages',
+    where: { slug: { equals: pg.slug } },
+    limit: 1,
+    draft: true,
+  })
+  if (existing.docs[0]) {
+    payload.logger.info(`bỏ qua (đã có): pages/${pg.slug}`)
+    continue
+  }
+  const doc = await payload.create({
+    collection: 'pages',
+    locale: 'vi',
+    data: {
+      title: pg.vi.title,
+      slug: pg.slug,
+      content: paragraph(...pg.vi.body),
+      site: 'qkenn',
+      _status: 'published',
+    },
+  })
+  await payload.update({
+    collection: 'pages',
+    id: doc.id,
+    locale: 'en',
+    data: { title: pg.en.title, content: paragraph(...pg.en.body), _status: 'published' },
+  })
+  payload.logger.info(`tạo: pages/${pg.slug} (published)`)
 }
 
 process.exit(0)
