@@ -5,8 +5,13 @@ import { buildConfig } from 'payload'
 import { fileURLToPath } from 'url'
 import sharp from 'sharp'
 
-import { Users } from './collections/Users'
+import { seoPlugin } from '@payloadcms/plugin-seo'
+
+import { Categories } from './collections/Categories'
 import { Media } from './collections/Media'
+import { Posts } from './collections/Posts'
+import { Users } from './collections/Users'
+import { SiteSettings } from './globals/SiteSettings'
 import { migrations } from './migrations'
 
 const filename = fileURLToPath(import.meta.url)
@@ -25,7 +30,8 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Users, Media],
+  collections: [Posts, Categories, Media, Users],
+  globals: [SiteSettings],
   // Song ngữ từ ngày 1: đổi `localized` trên field đã có dữ liệu sẽ mất dữ liệu field đó
   localization: {
     locales: [
@@ -68,5 +74,13 @@ export default buildConfig({
     },
   ],
   sharp,
-  plugins: [],
+  plugins: [
+    seoPlugin({
+      collections: ['posts'],
+      uploadsCollection: 'media',
+      tabbedUI: true,
+      generateTitle: ({ doc }) => (doc?.title ? `${doc.title} | qkenn` : 'qkenn'),
+      generateDescription: ({ doc }) => doc?.excerpt ?? '',
+    }),
+  ],
 })
