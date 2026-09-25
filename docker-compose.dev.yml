@@ -1,0 +1,13 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: cms-dev-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cms
+      POSTGRES_USER: cms
+      POSTGRES_PASSWORD: ${DEV_DB_PASSWORD:?set DEV_DB_PASSWORD}
+    ports: ["127.0.0.1:5433:5432"]
+    volumes: [cms_dev_pg:/var/lib/postgresql/data]
+volumes:
+  cms_dev_pg: { name: cms_dev_pg }
