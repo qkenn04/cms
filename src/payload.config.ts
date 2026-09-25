@@ -64,6 +64,18 @@ export default buildConfig({
     // Production (NODE_ENV=production) tự chạy migration pending lúc khởi động
     prodMigrations: migrations,
   }),
+  // Job queue: chạy scheduled publish. autoRun chỉ khởi động sau getPayload({ cron: true })
+  // (xem src/instrumentation.ts); host cron gọi /api/payload-jobs/run bằng CRON_SECRET làm dự phòng
+  jobs: {
+    autoRun: [{ cron: '* * * * *', queue: 'default', limit: 10 }],
+    access: {
+      run: ({ req }) => {
+        if (req.user) return true
+        const secret = process.env.CRON_SECRET
+        return Boolean(secret) && req.headers.get('authorization') === `Bearer ${secret}`
+      },
+    },
+  },
   endpoints: [
     {
       path: '/health',

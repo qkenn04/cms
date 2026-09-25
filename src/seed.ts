@@ -55,7 +55,7 @@ const posts = [
 
 const payload = await getPayload({ config })
 
-const catIds: Record<string, number | string> = {}
+const catIds: Record<string, number> = {}
 for (const c of categories) {
   const existing = await payload.find({ collection: 'categories', where: { slug: { equals: c.slug } }, limit: 1 })
   const doc =

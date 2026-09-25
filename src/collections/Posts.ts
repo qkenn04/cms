@@ -2,6 +2,7 @@ import type { CollectionConfig } from 'payload'
 
 import { isEditorOrAdmin, publishedOrLoggedIn } from '../access'
 import { slugFrom } from '../hooks/slugify'
+import { rebuildSiteAfterChange, rebuildSiteAfterDelete } from '../hooks/triggerSiteRebuild'
 
 export const Posts: CollectionConfig = {
   slug: 'posts',
@@ -32,6 +33,9 @@ export const Posts: CollectionConfig = {
         return data
       },
     ],
+    // Publish / unpublish / xoá bài public → GitHub repository_dispatch → build lại site tĩnh
+    afterChange: [rebuildSiteAfterChange],
+    afterDelete: [rebuildSiteAfterDelete],
   },
   fields: [
     { name: 'title', type: 'text', required: true, localized: true },
