@@ -54,8 +54,13 @@ export const dispatchSiteRebuild = async ({
   const repo = repoForSite(site)
   if (!repo) return false
 
+  // workflow_dispatch thay cho repository_dispatch: PAT fine-grained chỉ cần quyền Actions: write
+  // (repository_dispatch đòi Contents: write). GitHub trả 204 khi nhận.
+  const workflow = process.env.SITE_WORKFLOW || 'deploy.yml'
+  const url = `https://api.github.com/repos/${repo}/actions/workflows/${encodeURIComponent(workflow)}/dispatches`
+
   try {
-    const res = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${process.env.GITHUB_DISPATCH_TOKEN}`,
@@ -63,13 +68,13 @@ export const dispatchSiteRebuild = async ({
         'X-GitHub-Api-Version': '2022-11-28',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ event_type: 'cms-publish', client_payload: { site, slug, reason } }),
+      body: JSON.stringify({ ref: 'main', inputs: { reason, slug: slug ?? '' } }),
     })
     if (!res.ok) {
       logger.error(`site rebuild dispatch thất bại: ${repo} HTTP ${res.status}`)
       return false
     }
-    logger.info(`site rebuild dispatched: ${repo} (${reason} ${slug})`)
+    logger.info(`site rebuild dispatched: ${repo} ${workflow} (${reason} ${slug})`)
     return true
   } catch (err) {
     // Publish vẫn thành công; lỗi GitHub chỉ ghi log để chạy tay workflow_dispatch

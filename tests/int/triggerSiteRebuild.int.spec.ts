@@ -38,6 +38,8 @@ describe('dispatchSiteRebuild', () => {
     vi.stubEnv('SITE_REBUILD_ENABLED', 'true')
     vi.stubEnv('GITHUB_DISPATCH_TOKEN', 'test-token')
     vi.stubEnv('SITE_REPO', 'qkenn04/qkenn-site')
+    // .env của máy dev không được ảnh hưởng tới URL mong đợi
+    vi.stubEnv('SITE_WORKFLOW', '')
     fetchMock.mockReset()
     logger.info.mockReset()
     logger.warn.mockReset()
@@ -49,20 +51,35 @@ describe('dispatchSiteRebuild', () => {
     vi.unstubAllEnvs()
   })
 
-  it('gọi đúng endpoint repository_dispatch với event cms-publish', async () => {
+  it('gọi workflow_dispatch của deploy.yml trên nhánh main (PAT chỉ cần Actions: write)', async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
     const ok = await dispatchSiteRebuild({ logger, site: 'qkenn', slug: 'xin-chao', reason: 'publish' })
 
     expect(ok).toBe(true)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [url, init] = fetchMock.mock.calls[0]
-    expect(url).toBe('https://api.github.com/repos/qkenn04/qkenn-site/dispatches')
+    expect(url).toBe(
+      'https://api.github.com/repos/qkenn04/qkenn-site/actions/workflows/deploy.yml/dispatches',
+    )
     expect(init.method).toBe('POST')
     expect(init.headers.Authorization).toBe('Bearer test-token')
     expect(JSON.parse(init.body)).toEqual({
-      event_type: 'cms-publish',
-      client_payload: { site: 'qkenn', slug: 'xin-chao', reason: 'publish' },
+      ref: 'main',
+      inputs: { reason: 'publish', slug: 'xin-chao' },
     })
+  })
+
+  it('SITE_WORKFLOW đổi tên file workflow; slug null → chuỗi rỗng', async () => {
+    vi.stubEnv('SITE_WORKFLOW', 'rebuild.yml')
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
+    const ok = await dispatchSiteRebuild({ logger, site: 'qkenn', slug: null, reason: 'delete' })
+
+    expect(ok).toBe(true)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(
+      'https://api.github.com/repos/qkenn04/qkenn-site/actions/workflows/rebuild.yml/dispatches',
+    )
+    expect(JSON.parse(init.body)).toEqual({ ref: 'main', inputs: { reason: 'delete', slug: '' } })
   })
 
   it('không gọi khi chưa bật (dev mặc định)', async () => {
@@ -112,6 +129,8 @@ describe('rebuildSiteAfterGlobalChange (site-settings)', () => {
     vi.stubEnv('SITE_REBUILD_ENABLED', 'true')
     vi.stubEnv('GITHUB_DISPATCH_TOKEN', 'test-token')
     vi.stubEnv('SITE_REPO', 'qkenn04/qkenn-site')
+    // .env của máy dev không được ảnh hưởng tới URL mong đợi
+    vi.stubEnv('SITE_WORKFLOW', '')
     fetchMock.mockReset()
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
   })
@@ -127,10 +146,13 @@ describe('rebuildSiteAfterGlobalChange (site-settings)', () => {
     const result = await rebuildSiteAfterGlobalChange({ data: doc, doc, previousDoc: doc, req, global: {} as never, context: {} })
     expect(result).toBe(doc)
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    const [, init] = fetchMock.mock.calls[0]
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(
+      'https://api.github.com/repos/qkenn04/qkenn-site/actions/workflows/deploy.yml/dispatches',
+    )
     expect(JSON.parse(init.body)).toEqual({
-      event_type: 'cms-publish',
-      client_payload: { site: 'qkenn', slug: 'site-settings', reason: 'settings' },
+      ref: 'main',
+      inputs: { reason: 'settings', slug: 'site-settings' },
     })
   })
 })

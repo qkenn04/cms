@@ -8,7 +8,7 @@ Mọi lệnh chạy trong Docker `node:22-alpine` (Node trên host là 18):
 - Dev server: `pnpm dev -p 3003 -H 127.0.0.1` (3002 dành cho production)
 - Tạo migration: `pnpm migrate:create <tên>` — KHÔNG gọi thẳng `payload migrate:create` (xem bên dưới)
 - Áp migration: `pnpm migrate`; sau đó `pnpm generate:types` và `pnpm payload generate:importmap`
-- Test: `pnpm exec vitest run --config ./vitest.config.mts tests/int/triggerSiteRebuild.int.spec.ts`
+- Test: `pnpm exec vitest run --config ./vitest.config.mts tests/int/triggerSiteRebuild.int.spec.ts tests/int/slugify.int.spec.ts tests/int/htmlConverters.int.spec.ts`
 - Type check: `pnpm exec tsc --noEmit`
 - Seed dev: `pnpm payload run src/seed.ts`
 
@@ -22,10 +22,13 @@ Mọi lệnh chạy trong Docker `node:22-alpine` (Node trên host là 18):
 ## Architecture
 - `src/collections` (posts, pages, categories, media, users), `src/globals` (site-settings), `src/hooks`, `src/access`, `src/migrations`
 - Media trên Cloudflare R2 (`@payloadcms/storage-s3`), prefix theo `R2_PREFIX` (production `qkenn`, dev `dev`)
-- `posts`, `pages` afterChange/afterDelete → GitHub `repository_dispatch` sang `SITE_REPO` → build site Astro
+- `posts`, `pages` afterChange/afterDelete + global `site-settings` afterChange → GitHub `workflow_dispatch` (`.github/workflows/$SITE_WORKFLOW` của `SITE_REPO`, inputs reason/slug) → build site Astro. PAT fine-grained chỉ cần **Actions: write** trên repo site
+- Editor không có link nội bộ (LinkFeature enabledCollections: []): site tĩnh không biết locale → dùng URL tương đối như `/blog/<slug>/`
+- Ảnh chèn trong bài: converter riêng `src/lexical/htmlConverters.ts` (1 `<img>`, srcset chỉ gồm size cùng tỉ lệ)
 - Production: `/root/cms` (clone repo + `.env`), `scripts/deploy.sh` do GitHub Actions gọi qua SSH forced command
 
 ## Things Claude gets wrong
+- Slug toàn chữ số bị chặn (trùng URL phân trang `/blog/2` của site); slug tự sinh từ tiêu đề số được thêm tiền tố
 - `migrate:create` phải chạy với `R2_PREFIX=qkenn` (script `pnpm migrate:create` đã ép) — nếu không, default của cột `media.prefix` trong migration thành `dev`
 - drizzle hỏi tương tác "created or renamed" khi đổi cột → cần TTY; kiểm tra migration không có `RENAME` ngoài ý muốn
 - Quên `output: 'standalone'` trong next.config.ts → Dockerfile hỏng

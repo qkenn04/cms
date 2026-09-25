@@ -1,5 +1,5 @@
 import { postgresAdapter } from '@payloadcms/db-postgres'
-import { lexicalEditor } from '@payloadcms/richtext-lexical'
+import { LinkFeature, lexicalEditor } from '@payloadcms/richtext-lexical'
 import path from 'path'
 import { buildConfig } from 'payload'
 import { fileURLToPath } from 'url'
@@ -49,7 +49,14 @@ export default buildConfig({
     defaultLocale: 'vi',
     fallback: true,
   },
-  editor: lexicalEditor(),
+  // Tắt "internal link": contentHtml không biết locale/route của site → link nội bộ ra href="#".
+  // Editor dán URL tương đối (vd /blog/xin-chao) bằng link custom.
+  editor: lexicalEditor({
+    features: ({ defaultFeatures }) => [
+      ...defaultFeatures.filter((feature) => feature.key !== 'link'),
+      LinkFeature({ enabledCollections: [] }),
+    ],
+  }),
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
@@ -122,7 +129,8 @@ export default buildConfig({
       collections: ['posts', 'pages'],
       uploadsCollection: 'media',
       tabbedUI: true,
-      generateTitle: ({ doc }) => (doc?.title ? `${doc.title} | qkenn` : 'qkenn'),
+      // Chỉ tiêu đề bài; site tự thêm hậu tố thương hiệu vào <title>
+      generateTitle: ({ doc }) => doc?.title ?? '',
       generateDescription: ({ doc }) => doc?.excerpt ?? '',
     }),
   ],

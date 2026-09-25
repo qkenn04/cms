@@ -2,7 +2,8 @@ import type { CodeField, CollectionConfig } from 'payload'
 import { lexicalHTMLField } from '@payloadcms/richtext-lexical'
 
 import { isEditorOrAdmin, publishedOrLoggedIn } from '../access'
-import { slugFrom } from '../hooks/slugify'
+import { htmlConverters } from '../lexical/htmlConverters'
+import { slugFrom, validateSlug } from '../hooks/slugify'
 import { rebuildSiteAfterChange, rebuildSiteAfterDelete } from '../hooks/triggerSiteRebuild'
 
 export const Posts: CollectionConfig = {
@@ -34,7 +35,7 @@ export const Posts: CollectionConfig = {
         return data
       },
     ],
-    // Publish / unpublish / xoá bài public → GitHub repository_dispatch → build lại site tĩnh
+    // Publish / unpublish / xoá bài public → GitHub workflow_dispatch → build lại site tĩnh
     afterChange: [rebuildSiteAfterChange],
     afterDelete: [rebuildSiteAfterDelete],
   },
@@ -46,14 +47,21 @@ export const Posts: CollectionConfig = {
       unique: true,
       index: true,
       admin: { position: 'sidebar', description: 'Để trống sẽ tự sinh từ tiêu đề' },
-      hooks: { beforeValidate: [slugFrom('title')] },
+      hooks: { beforeValidate: [slugFrom('title', 'bai')] },
+      // Slug toàn chữ số trùng URL phân trang /blog/N của site
+      validate: validateSlug,
     },
     { name: 'excerpt', type: 'textarea', localized: true, maxLength: 300 },
     { name: 'content', type: 'richText', required: true, localized: true },
     // HTML sinh từ `content` mỗi lần đọc — site Astro render thẳng.
     // virtual: không tạo cột DB (storeInDB: false của lexicalHTMLField vẫn tạo cột rỗng)
+    // converters: ảnh chèn trong bài → 1 <img> lazy + srcset cùng tỉ lệ (src/lexical/htmlConverters.ts)
     {
-      ...(lexicalHTMLField({ lexicalFieldName: 'content', htmlFieldName: 'contentHtml' }) as CodeField),
+      ...(lexicalHTMLField({
+        lexicalFieldName: 'content',
+        htmlFieldName: 'contentHtml',
+        converters: htmlConverters,
+      }) as CodeField),
       virtual: true,
     },
     { name: 'coverImage', type: 'upload', relationTo: 'media' },
