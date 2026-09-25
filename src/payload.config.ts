@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url'
 import sharp from 'sharp'
 
 import { seoPlugin } from '@payloadcms/plugin-seo'
+import { s3Storage } from '@payloadcms/storage-s3'
 
 import { Categories } from './collections/Categories'
 import { Media } from './collections/Media'
@@ -19,6 +20,10 @@ const dirname = path.dirname(filename)
 
 const serverURL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
 const origins = [serverURL, ...(process.env.CORS_ORIGINS || '').split(',').filter(Boolean)]
+
+// Có R2_PUBLIC_URL (custom domain của bucket) thì ảnh serve thẳng từ CDN;
+// chưa có thì Payload đọc từ R2 và trả qua /api/media/file/*
+const r2PublicURL = process.env.R2_PUBLIC_URL?.replace(/\/$/, '')
 
 export default buildConfig({
   serverURL,
@@ -75,6 +80,29 @@ export default buildConfig({
   ],
   sharp,
   plugins: [
+    s3Storage({
+      // Không cấu hình R2 (vd CI build) thì giữ lưu local
+      enabled: Boolean(process.env.R2_BUCKET),
+      collections: {
+        media: r2PublicURL
+          ? {
+              prefix: 'qkenn',
+              disablePayloadAccessControl: true,
+              generateFileURL: ({ filename, prefix }) => `${r2PublicURL}/${prefix}/${filename}`,
+            }
+          : { prefix: 'qkenn' },
+      },
+      bucket: process.env.R2_BUCKET || '',
+      config: {
+        credentials: {
+          accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+          secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+        },
+        region: 'auto',
+        endpoint: process.env.R2_ENDPOINT,
+        forcePathStyle: true,
+      },
+    }),
     seoPlugin({
       collections: ['posts'],
       uploadsCollection: 'media',

@@ -2,7 +2,9 @@ import type { CollectionConfig } from 'payload'
 
 import { anyone, isAdmin, isEditorOrAdmin } from '../access'
 
-// Tạm lưu local (./media); chuyển sang R2 bằng @payloadcms/storage-s3 khi có bucket
+const webp = { format: 'webp' as const, options: { quality: 80 } }
+
+// File lưu trên Cloudflare R2 (plugin storage-s3 trong payload.config.ts)
 export const Media: CollectionConfig = {
   slug: 'media',
   access: {
@@ -16,12 +18,13 @@ export const Media: CollectionConfig = {
     mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif'],
     focalPoint: true,
     adminThumbnail: 'thumbnail',
-    formatOptions: { format: 'webp', options: { quality: 80 } },
+    formatOptions: webp,
+    // formatOptions ở trên chỉ áp cho ảnh gốc; mỗi size phải khai báo riêng
     imageSizes: [
-      { name: 'thumbnail', width: 400, height: 300, position: 'centre' },
-      { name: 'card', width: 800, withoutEnlargement: true },
-      { name: 'hero', width: 1600, withoutEnlargement: true },
-      { name: 'og', width: 1200, height: 630, position: 'centre' },
+      { name: 'thumbnail', width: 400, height: 300, position: 'centre', formatOptions: webp },
+      { name: 'card', width: 800, withoutEnlargement: true, formatOptions: webp },
+      { name: 'hero', width: 1600, withoutEnlargement: true, formatOptions: webp },
+      { name: 'og', width: 1200, height: 630, position: 'centre', formatOptions: webp },
     ],
   },
   fields: [
