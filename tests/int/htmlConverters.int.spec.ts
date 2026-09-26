@@ -168,6 +168,36 @@ describe('htmlConverters: upload trong contentHtml', () => {
   })
 })
 
+describe('htmlConverters: caption của media', () => {
+  it('có caption → <figure><img …><figcaption> (caption escape, img giữ nguyên thuộc tính)', async () => {
+    const html = await convertLexicalToHTMLAsync({
+      converters: htmlConverters,
+      data: editorState({ ...wide, caption: '  Sơ đồ <b>"A" & B</b>  ' }),
+      disableContainer: true,
+    })
+    expect(html).toMatch(
+      /^<p>Mở đầu<\/p><figure><img [^>]*\/><figcaption>Sơ đồ &lt;b&gt;&quot;A&quot; &amp; B&lt;\/b&gt;<\/figcaption><\/figure>$/,
+    )
+    expect(html).not.toContain('<b>')
+    const img = html.match(/<img\b[^>]*>/)![0]
+    expect(img).toContain(`src="${base}/wide.webp"`)
+    expect(img).toContain('alt="Ảnh &quot;rộng&quot; &lt;16:9&gt;"')
+    expect(img).toContain('srcset="')
+  })
+
+  it('không caption / caption rỗng / null → chỉ <img>, không <figure>', async () => {
+    for (const caption of [undefined, null, '', '   ']) {
+      const html = await convertLexicalToHTMLAsync({
+        converters: htmlConverters,
+        data: editorState({ ...wide, caption }),
+        disableContainer: true,
+      })
+      expect(html).not.toMatch(/<figure|<figcaption/)
+      expect(html.match(/<img\b/g)).toHaveLength(1)
+    }
+  })
+})
+
 // ---------- code block + bảng ----------
 
 const root = (...children: unknown[]) =>

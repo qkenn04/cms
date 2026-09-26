@@ -31,6 +31,15 @@ const escapeAttr = (value: string): string =>
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
 
+/** Escape nội dung text: & < > " ' */
+export const escapeHTML = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
 // Dấu cách / dấu phẩy trong URL làm vỡ cú pháp srcset
 const srcsetUrl = (url: string): string => url.replace(/ /g, '%20').replace(/,/g, '%2C')
 
@@ -60,7 +69,11 @@ export const buildSrcset = (media: Media, primary: ImageSize): string | undefine
   return list.map((c) => `${srcsetUrl(c.url)} ${c.width}w`).join(', ')
 }
 
-/** HTML cho 1 media doc chèn trong nội dung; '' khi thiếu dữ liệu */
+/**
+ * HTML cho 1 media doc chèn trong nội dung; '' khi thiếu dữ liệu.
+ * Media có caption → `<figure><img …><figcaption>caption</figcaption></figure>` (caption escape);
+ * không caption → chỉ `<img>`.
+ */
 export const uploadToHTML = (
   media: Media,
   { alt, styleTag = '' }: { alt?: string; styleTag?: string } = {},
@@ -79,19 +92,12 @@ export const uploadToHTML = (
     if (srcset) attrs.push(`srcset="${escapeAttr(srcset)}"`, `sizes="${CONTENT_SIZES}"`)
   }
   attrs.push('loading="lazy"', 'decoding="async"')
-  return `<img${styleTag} ${attrs.join(' ')} />`
+  const caption = typeof media.caption === 'string' ? media.caption.trim() : ''
+  if (!caption) return `<img${styleTag} ${attrs.join(' ')} />`
+  return `<figure${styleTag}><img ${attrs.join(' ')} /><figcaption>${escapeHTML(caption)}</figcaption></figure>`
 }
 
 // ---------- Code block (CodeBlock của richtext-lexical, block slug 'Code', fields language + code) ----------
-
-/** Escape nội dung text: & < > " ' */
-export const escapeHTML = (value: string): string =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 
 /** Tên ngôn ngữ cho class `language-*`: chỉ giữ [a-z0-9+#-]; rỗng → 'text' */
 export const sanitizeCodeLanguage = (language: unknown): string => {
